@@ -1,0 +1,28 @@
+{
+  "name": "nhaclicham-api",
+  "version": "1.0.0",
+  "description": "Vietnamese Lunar Calendar Reminders API using Supabase Edge Functions",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/nhaclicham-api.git"
+  },
+  "keywords": [
+    "lunar-calendar",
+    "vietnamese",
+    "reminders",
+    "supabase",
+    "edge-functions",
+    "deno",
+    "api"
+  ],
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "dev": "supabase functions serve",
+    "deploy": "supabase functions deploy",
+    "setup": "supabase link --project-ref aekfivlrnrdzolsiipdf"
+  },
+  "engines": {
+    "note": "This project uses Deno runtime via Supabase Edge Functions"
+  }
+}
