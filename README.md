@@ -9,8 +9,14 @@ Backend API để nhắc lịch âm hàng ngày, sử dụng **Supabase Edge Fun
 **Auth Header:**
 
 ```
-Authorization: Bearer ***REMOVED***
+Authorization: Bearer YOUR_SUPABASE_ANON_KEY
 ```
+
+> **⚠️ Security Note:**
+>
+> - Anon key được lấy từ Supabase Dashboard > Settings > API
+> - Không commit anon key vào git
+> - Sử dụng environment variables cho production
 
 ## 📋 API Endpoints
 
@@ -62,14 +68,26 @@ GET /health
 
 ## 💻 Example Usage
 
+### Get your Supabase Anon Key
+
+1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
+2. Select your project
+3. Go to **Settings** > **API**
+4. Copy the `anon` `public` key
+
+### API Calls
+
 ```bash
+# Set your key as environment variable
+export SUPABASE_ANON_KEY="your_anon_key_here"
+
 # Test API
-curl -H "Authorization: Bearer YOUR_TOKEN" \
+curl -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
   https://aekfivlrnrdzolsiipdf.supabase.co/functions/v1/api/lunar/today
 
 # Tạo reminder
 curl -X POST \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
   -H "Content-Type: application/json" \
   -d '{"user_id":"user123","note":"Test","lunar_day":10,"lunar_month":3,"repeat_every_year":true}' \
   https://aekfivlrnrdzolsiipdf.supabase.co/functions/v1/api/reminders
@@ -142,6 +160,13 @@ CREATE TABLE reminders (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
+
+## 🔒 Security
+
+- **Anon Key**: Public key, safe for client-side use
+- **Service Role Key**: Server-side only, never expose
+- **Row Level Security**: Enabled on database tables
+- **Edge Functions**: Secure serverless environment
 
 ## 🚀 Deployment
 
