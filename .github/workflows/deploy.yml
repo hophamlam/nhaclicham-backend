@@ -3,12 +3,11 @@ name: Deploy Edge Functions
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
@@ -17,6 +16,12 @@ jobs:
         uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      - name: Link Supabase project
+        run: supabase link --project-ref $PROJECT_REF
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: aekfivlrnrdzolsiipdf
 
       - name: Deploy functions
         run: supabase functions deploy
