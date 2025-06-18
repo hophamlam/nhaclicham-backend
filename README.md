@@ -1,185 +1,91 @@
-# Nhắc Lịch Âm API
+# NhacLichAm Supabase Backend
 
-Backend API để nhắc lịch âm hàng ngày, sử dụng **Supabase Edge Functions** và **Deno runtime**.
+This is the backend for a Lunar Calendar Reminder application, built entirely on Supabase Edge Functions. It provides a serverless API for managing events (both lunar and solar), users, and notification settings.
 
-## 🚀 Live API
+[![Deploy to Supabase](https://supabase.com/docs/img/deploy/button.svg)](https://supabase.com/new/project?template_url=https://github.com/hophamlam/nhaclicham-backend)
 
-**Base URL:** `https://aekfivlrnrdzolsiipdf.supabase.co/functions/v1/api`
+## Features
 
-**Auth Header:**
+- **Serverless API**: Built with Deno and deployed as a Supabase Edge Function.
+- **Database**: Leverages Supabase Postgres for data storage.
+- **Authentication**: Integrated with Supabase Auth for user management and security.
+- **Lunar/Solar Events**: Supports creating and managing both traditional lunar calendar events and standard solar calendar events.
+- **CI/CD**: GitHub Actions workflow for automatic deployment to Supabase on push to `main`.
 
-```
-Authorization: Bearer YOUR_SUPABASE_ANON_KEY
-```
+## Database Schema
 
-> **⚠️ Security Note:**
->
-> - Anon key được lấy từ Supabase Dashboard > Settings > API
-> - Không commit anon key vào git
-> - Sử dụng environment variables cho production
+The database consists of four main tables:
 
-## 📋 API Endpoints
+- `users`: Stores user information, linked to Supabase Auth.
+- `events`: Stores event details, including notes, dates (lunar or solar), and user links.
+- `notification_settings`: Configures how and when users are notified about events.
+- `notification_logs`: Records all notifications sent to users.
 
-### Lunar Calendar
+For detailed schema and policies, see the migration file at `supabase/migrations/20250618000000_initial_schema.sql`.
 
-```bash
-# Ngày âm lịch hôm nay
-GET /api/lunar/today
+## API Endpoints
 
-# Chuyển đổi dương lịch sang âm lịch
-POST /api/lunar/convert
-Body: {"day": 17, "month": 6, "year": 2025}
-```
+All endpoints are served from the main Edge Function located at `/supabase/functions/api`. A valid Supabase JWT is required in the `Authorization: Bearer <TOKEN>` header for all requests.
 
-### Reminders
+### Events
 
-```bash
-# Tạo reminder mới
-POST /api/reminders
-Body: {
-  "user_id": "user123",
-  "note": "Ngày giỗ tổ tiên",
-  "lunar_day": 10,
-  "lunar_month": 3,
-  "repeat_every_year": true
-}
+- **`GET /api/events`**: Get all events for the authenticated user.
+- **`POST /api/events`**: Create a new event.
+  - **Body**: `CreateEventRequest`
+- **`GET /api/events/{id}`**: Get a single event by its ID.
+- **`PUT /api/events/{id}`**: Update an event by its ID.
+  - **Body**: `UpdateEventRequest`
+- **`DELETE /api/events/{id}`**: Delete an event by its ID.
 
-# Lấy reminders hôm nay
-GET /api/reminders/today
+### Specialized Endpoints
 
-# Lấy reminders của user
-GET /api/reminders/user/{userId}
+- **`GET /api/today-events`**: Get all events (for all users) that are due today. This is intended for use by a scheduled trigger (e.g., Supabase Cron Job) to send notifications.
+- **`GET /api/lunar-convert?date=YYYY-MM-DD`**: Convert a solar date to its corresponding lunar date.
 
-# Lấy reminder theo ID
-GET /api/reminders/{id}
+### TypeScript Types
 
-# Cập nhật reminder
-PUT /api/reminders/{id}
+The shared types for API requests and database objects can be found in `supabase/functions/_shared/types.ts`.
 
-# Xóa reminder
-DELETE /api/reminders/{id}
-```
+## Local Development
 
-### Health Check
+1.  **Install Supabase CLI**:
+    Follow the [official instructions](https://supabase.com/docs/guides/cli) to install the CLI.
 
-```bash
-GET /health
-```
+2.  **Link Project**:
+    Link your local repository to your Supabase project. You will need your project's reference ID.
 
-## 💻 Example Usage
+    ```bash
+    supabase link --project-ref <YOUR_PROJECT_ID>
+    ```
 
-### Get your Supabase Anon Key
+3.  **Set Up Environment Variables**:
+    Create a `.env.local` file in the `supabase` directory and add your project's keys.
 
-1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
-2. Select your project
-3. Go to **Settings** > **API**
-4. Copy the `anon` `public` key
+    ```
+    SUPABASE_URL=https://<YOUR_PROJECT_ID>.supabase.co
+    SUPABASE_ANON_KEY=<YOUR_ANON_KEY>
+    SUPABASE_SERVICE_ROLE_KEY=<YOUR_SERVICE_ROLE_KEY>
+    ```
 
-### API Calls
+4.  **Run Functions Locally**:
+    Start the local Supabase environment. This will also serve the Edge Functions.
+    ```bash
+    supabase functions serve --env-file ./supabase/.env.local
+    ```
 
-```bash
-# Set your key as environment variable
-export SUPABASE_ANON_KEY="your_anon_key_here"
+## Deployment
 
-# Test API
-curl -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-  https://aekfivlrnrdzolsiipdf.supabase.co/functions/v1/api/lunar/today
+The project is configured for automatic deployment using GitHub Actions. Any push to the `main` branch will trigger the workflow defined in `.github/workflows/deploy.yml`, which deploys the Edge Functions to your linked Supabase project.
 
-# Tạo reminder
-curl -X POST \
-  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"user_id":"user123","note":"Test","lunar_day":10,"lunar_month":3,"repeat_every_year":true}' \
-  https://aekfivlrnrdzolsiipdf.supabase.co/functions/v1/api/reminders
-```
+For this to work, you must set the following secrets in your GitHub repository settings:
 
-## 🛠️ Development
+- `SUPABASE_ACCESS_TOKEN`: Your Supabase personal access token.
+- `SUPABASE_PROJECT_ID`: Your Supabase project ID.
 
-### Prerequisites
+## Contributing
 
-- [Supabase CLI](https://supabase.com/docs/guides/cli)
-- [Deno](https://deno.land/) (optional, for local testing)
+Contributions are welcome! Please feel free to submit a pull request. For more details, see [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-### Local Development
+## License
 
-```bash
-# Clone repository
-git clone <repo-url>
-cd nhaclicham-backend
-
-# Login to Supabase
-supabase login
-
-# Link to existing project
-supabase link --project-ref aekfivlrnrdzolsiipdf
-
-# Serve functions locally
-supabase functions serve
-
-# Deploy functions
-supabase functions deploy
-```
-
-## 📁 Project Structure
-
-```
-├── supabase/
-│   ├── functions/
-│   │   ├── _shared/           # Shared utilities
-│   │   │   ├── types.ts       # TypeScript interfaces
-│   │   │   ├── supabase.ts    # Database client
-│   │   │   ├── utils.ts       # HTTP utilities
-│   │   │   ├── lunar-service.ts  # Lunar calendar logic
-│   │   │   └── reminder-service.ts # Business logic
-│   │   ├── api/               # Main API endpoint
-│   │   ├── health/            # Health check
-│   │   └── import_map.json    # Dependencies
-│   └── migrations/            # Database migrations
-└── README.md
-```
-
-## 🎯 Features
-
-- ✅ **Lunar Calendar**: Chuyển đổi dương lịch ↔ âm lịch
-- ✅ **Reminders**: CRUD operations cho lời nhắc
-- ✅ **Today's Reminders**: Tự động lấy reminders theo ngày âm lịch
-- ✅ **Global Edge**: Deploy trên global CDN
-- ✅ **Auto-scaling**: Serverless với Deno runtime
-- ✅ **TypeScript**: Full type safety
-
-## 📊 Database Schema
-
-```sql
-CREATE TABLE reminders (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL,
-  note TEXT NOT NULL,
-  lunar_day INTEGER NOT NULL CHECK (lunar_day >= 1 AND lunar_day <= 30),
-  lunar_month INTEGER NOT NULL CHECK (lunar_month >= 1 AND lunar_month <= 12),
-  repeat_every_year BOOLEAN DEFAULT false,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-```
-
-## 🔒 Security
-
-- **Anon Key**: Public key, safe for client-side use
-- **Service Role Key**: Server-side only, never expose
-- **Row Level Security**: Enabled on database tables
-- **Edge Functions**: Secure serverless environment
-
-## 🚀 Deployment
-
-Functions được deploy tự động trên **Supabase Edge Functions** - global serverless platform.
-
-**Benefits:**
-
-- 🌍 Global edge locations
-- ⚡ Low latency worldwide
-- 📈 Auto-scaling
-- 💰 Pay-per-use pricing
-- 🔒 Built-in auth & security
-
----
-
-Built with ❤️ using Supabase Edge Functions & Deno
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.

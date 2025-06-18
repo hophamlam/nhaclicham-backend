@@ -104,3 +104,6 @@ temp/
 # Supabase local development (if using)
 .branches/
 .temp/ 
+
+# Cursor
+cursorai-instructions/supabase/.temp/

@@ -1,65 +1,41 @@
 // Lunar calendar service for Edge Functions
 import { LunarDate } from "./types.ts";
+// Import lunar calendar library from import map
+const lunarCalendarModule = await import("lunar-calendar");
+const lunarCalendar = lunarCalendarModule.default || lunarCalendarModule;
 
 export class LunarService {
   /**
-   * Chuyển đổi từ dương lịch sang âm lịch
-   * Sử dụng algorithm đơn giản cho demo
+   * Converts a solar date to a lunar date, including leap month information.
+   * @param date The solar date to convert.
+   * @returns The corresponding lunar date.
    */
   static convertSolarToLunar(date: Date): LunarDate {
     try {
-      // Simplified lunar conversion for demo
-      // This is a basic approximation - in production, use proper lunar calendar library
-      const solarDay = date.getDate();
-      const solarMonth = date.getMonth() + 1;
-      const solarYear = date.getFullYear();
+      const [lunarDay, lunarMonth, lunarYear, isLeap] =
+        lunarCalendar.convertSolar2Lunar(
+          date.getDate(),
+          date.getMonth() + 1, // getMonth() is 0-indexed
+          date.getFullYear(),
+          7 // Timezone offset for Vietnam
+        );
 
-      // Basic lunar approximation (for demo purposes)
-      // Real lunar calendar calculation is much more complex
-      let lunarDay = solarDay;
-      let lunarMonth = solarMonth;
-      let lunarYear = solarYear;
-
-      // Simple offset approximation
-      if (solarDay >= 15) {
-        lunarDay = solarDay - 15;
-        lunarMonth = solarMonth + 1;
-        if (lunarMonth > 12) {
-          lunarMonth = 1;
-          lunarYear++;
-        }
-      } else {
-        lunarDay = solarDay + 15;
-        lunarMonth = solarMonth - 1;
-        if (lunarMonth < 1) {
-          lunarMonth = 12;
-          lunarYear--;
-        }
-      }
-
-      // Ensure valid lunar day range
-      if (lunarDay > 30) lunarDay = 30;
-      if (lunarDay < 1) lunarDay = 1;
-
-      return {
-        lunarDay,
-        lunarMonth,
-        lunarYear,
-      };
+      return { lunarDay, lunarMonth, lunarYear, isLeap: !!isLeap };
     } catch (error) {
       console.error("Error converting solar to lunar date:", error);
-      // Fallback to current date if conversion fails
-      const today = new Date();
+      // Provide a fallback to ensure the function always returns a valid object
       return {
-        lunarDay: today.getDate(),
-        lunarMonth: today.getMonth() + 1,
-        lunarYear: today.getFullYear(),
+        lunarDay: date.getDate(),
+        lunarMonth: date.getMonth() + 1,
+        lunarYear: date.getFullYear(),
+        isLeap: false,
       };
     }
   }
 
   /**
-   * Lấy ngày âm lịch hôm nay
+   * Gets today's lunar date.
+   * @returns Today's lunar date.
    */
   static getTodayLunarDate(): LunarDate {
     const today = new Date();
@@ -67,7 +43,10 @@ export class LunarService {
   }
 
   /**
-   * Kiểm tra xem ngày âm lịch có hợp lệ không
+   * Checks if a given lunar date is valid.
+   * @param lunarDay The lunar day (1-30).
+   * @param lunarMonth The lunar month (1-12).
+   * @returns True if the lunar date is valid.
    */
   static isValidLunarDate(lunarDay: number, lunarMonth: number): boolean {
     return (

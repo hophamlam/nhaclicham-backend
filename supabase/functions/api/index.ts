@@ -1,290 +1,262 @@
 // Main API Edge Function - Routes all requests
 import {
-  handleCORS,
   createSuccessResponse,
   createErrorResponse,
-  parseJsonBody,
-  getPathSegments,
-  getQueryParams,
 } from "../_shared/utils.ts";
-import { ReminderService } from "../_shared/reminder-service.ts";
 import { LunarService } from "../_shared/lunar-service.ts";
-import {
-  CreateReminderRequest,
-  UpdateReminderRequest,
+import { supabase } from "../_shared/supabase.ts";
+import { EventService } from "../_shared/event-service.ts";
+import { NotificationService } from "../_shared/notification-service.ts";
+import { UserService } from "../_shared/user-service.ts";
+import type {
+  CreateEventRequest,
+  UpdateEventRequest,
+  ApiResponse,
+  NotificationSetting,
 } from "../_shared/types.ts";
 
-Deno.serve(async (req: Request) => {
-  // Handle CORS preflight
-  const corsResponse = handleCORS(req);
-  if (corsResponse) return corsResponse;
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+const BARE_URL_REGEX = /^https?:\/\/[^\/]+\/api\/?$/;
+const URL_WITH_ID_REGEX = /^https?:\/\/[^\/]+\/api\/events\/([a-fA-F0-9\-]+)$/;
+const EVENTS_BASE_URL_REGEX = /^https?:\/\/[^\/]+\/api\/events\/?$/;
+const TODAY_EVENTS_URL_REGEX = /^https?:\/\/[^\/]+\/api\/today-events\/?$/;
+const LUNAR_CONVERT_URL_REGEX = /^https?:\/\/[^\/]+\/api\/lunar-convert\/?$/;
+const USER_PROFILE_URL_REGEX = /^https?:\/\/[^\/]+\/api\/profile\/?$/;
+const NOTIFICATIONS_URL_REGEX = /^https?:\/\/[^\/]+\/api\/notifications\/?$/;
+
+async function handler(req: Request): Promise<Response> {
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  const { url, method } = req;
+  const authHeader = req.headers.get("Authorization");
+
+  if (!authHeader) {
+    return new Response(
+      JSON.stringify({ error: "Missing authorization header" }),
+      {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
 
   try {
-    const method = req.method;
-    const pathSegments = getPathSegments(req);
-    const queryParams = getQueryParams(req);
-
-    // Root endpoint - API documentation
-    if (pathSegments.length === 1 && pathSegments[0] === "api") {
-      return createSuccessResponse({
-        message: "Welcome to Nhắc Lịch Âm API",
-        version: "1.0.0",
-        endpoints: {
-          health: "GET /api/health",
-          reminders: {
-            create: "POST /api/reminders",
-            get_by_user: "GET /api/reminders/user/:userId",
-            get_by_id: "GET /api/reminders/:id",
-            update: "PUT /api/reminders/:id",
-            delete: "DELETE /api/reminders/:id",
-            today_by_user: "GET /api/reminders/today/:userId",
-            today_all: "GET /api/reminders/today",
-          },
-          lunar: {
-            today: "GET /api/lunar/today",
-            convert: "POST /api/lunar/convert",
-          },
-        },
+    const {
+      data: { user },
+    } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+    if (!user) {
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Health check
-    if (
-      pathSegments.length === 2 &&
-      pathSegments[0] === "api" &&
-      pathSegments[1] === "health"
-    ) {
-      return createSuccessResponse({
-        status: "OK",
-        message: "Nhắc Lịch Âm API is running",
-        timestamp: new Date().toISOString(),
-        version: "1.0.0",
-      });
-    }
+    // Ensure user exists in our database
+    await UserService.upsertUser(user.id);
 
-    // Lunar endpoints
-    if (
-      pathSegments.length >= 2 &&
-      pathSegments[0] === "api" &&
-      pathSegments[1] === "lunar"
-    ) {
-      return await handleLunarRoutes(req, pathSegments.slice(2), method);
-    }
-
-    // Reminder endpoints
-    if (
-      pathSegments.length >= 2 &&
-      pathSegments[0] === "api" &&
-      pathSegments[1] === "reminders"
-    ) {
-      return await handleReminderRoutes(
-        req,
-        pathSegments.slice(2),
-        method,
-        queryParams
+    // Root endpoint
+    if (BARE_URL_REGEX.test(url)) {
+      return new Response(
+        JSON.stringify({ message: "Welcome to Nhac Lich Am API!" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
       );
     }
 
-    return createErrorResponse("Endpoint not found", 404);
-  } catch (error) {
-    console.error("Error in API function:", error);
-    return createErrorResponse(error.message || "Internal server error");
-  }
-});
-
-/**
- * Handle lunar routes
- */
-async function handleLunarRoutes(
-  req: Request,
-  pathSegments: string[],
-  method: string
-): Promise<Response> {
-  if (
-    method === "GET" &&
-    pathSegments.length === 1 &&
-    pathSegments[0] === "today"
-  ) {
-    // GET /api/lunar/today
-    const todayLunar = LunarService.getTodayLunarDate();
-    const today = new Date();
-
-    return createSuccessResponse({
-      solar_date: {
-        day: today.getDate(),
-        month: today.getMonth() + 1,
-        year: today.getFullYear(),
-      },
-      lunar_date: {
-        day: todayLunar.lunarDay,
-        month: todayLunar.lunarMonth,
-        year: todayLunar.lunarYear,
-      },
-    });
-  }
-
-  if (
-    method === "POST" &&
-    pathSegments.length === 1 &&
-    pathSegments[0] === "convert"
-  ) {
-    // POST /api/lunar/convert
-    const { day, month, year } = await parseJsonBody<{
-      day: number;
-      month: number;
-      year: number;
-    }>(req);
-
-    if (!day || !month || !year) {
-      return createErrorResponse(
-        "Missing required fields: day, month, year",
-        400
-      );
-    }
-
-    if (
-      day < 1 ||
-      day > 31 ||
-      month < 1 ||
-      month > 12 ||
-      year < 1900 ||
-      year > 2100
-    ) {
-      return createErrorResponse("Invalid date values", 400);
-    }
-
-    const solarDate = new Date(year, month - 1, day);
-    const lunarDate = LunarService.convertSolarToLunar(solarDate);
-
-    return createSuccessResponse({
-      solar_date: { day, month, year },
-      lunar_date: {
-        day: lunarDate.lunarDay,
-        month: lunarDate.lunarMonth,
-        year: lunarDate.lunarYear,
-      },
-    });
-  }
-
-  return createErrorResponse("Invalid lunar endpoint", 404);
-}
-
-/**
- * Handle reminder routes
- */
-async function handleReminderRoutes(
-  req: Request,
-  pathSegments: string[],
-  method: string,
-  queryParams: URLSearchParams
-): Promise<Response> {
-  switch (method) {
-    case "POST":
-      if (pathSegments.length === 0) {
-        // POST /api/reminders
-        const reminderData = await parseJsonBody<CreateReminderRequest>(req);
-
-        if (
-          !reminderData.user_id ||
-          !reminderData.note ||
-          reminderData.lunar_day === undefined ||
-          reminderData.lunar_month === undefined
-        ) {
+    // --- User Profile ---
+    if (USER_PROFILE_URL_REGEX.test(url)) {
+      switch (method) {
+        case "GET":
+          return handleGetProfile(user.id);
+        case "PUT":
+        case "PATCH":
+          return handleUpdateProfile(req, user.id);
+        default:
           return createErrorResponse(
-            "Missing required fields: user_id, note, lunar_day, lunar_month",
-            400
+            `Method ${method} not allowed for this route.`,
+            405
           );
-        }
-
-        const reminder = await ReminderService.createReminder(reminderData);
-        return createSuccessResponse(reminder, "Reminder created successfully");
       }
-      break;
+    }
 
-    case "GET":
-      // GET /api/reminders/today
-      if (pathSegments.length === 1 && pathSegments[0] === "today") {
-        const reminders = await ReminderService.checkTodayReminders();
-        const todayLunar = LunarService.getTodayLunarDate();
-
-        return createSuccessResponse({
-          reminders,
-          today_lunar: {
-            day: todayLunar.lunarDay,
-            month: todayLunar.lunarMonth,
-            year: todayLunar.lunarYear,
-          },
-          message: `Found ${reminders.length} reminders for today`,
-        });
+    // --- Notifications ---
+    if (NOTIFICATIONS_URL_REGEX.test(url)) {
+      switch (method) {
+        case "GET":
+          return handleGetNotificationSettings(user.id);
+        case "POST":
+          return handleCreateNotificationSetting(req, user.id);
+        default:
+          return createErrorResponse(
+            `Method ${method} not allowed for this route.`,
+            405
+          );
       }
+    }
 
-      // GET /api/reminders/today/:userId
-      if (pathSegments.length === 2 && pathSegments[0] === "today") {
-        const userId = pathSegments[1];
-        const reminders = await ReminderService.getTodayReminders(userId);
-        const todayLunar = LunarService.getTodayLunarDate();
-
-        return createSuccessResponse({
-          reminders,
-          today_lunar: {
-            day: todayLunar.lunarDay,
-            month: todayLunar.lunarMonth,
-            year: todayLunar.lunarYear,
-          },
-        });
+    // --- Event CRUD ---
+    const eventWithIdMatch = url.match(URL_WITH_ID_REGEX);
+    if (eventWithIdMatch) {
+      const eventId = eventWithIdMatch[1];
+      switch (method) {
+        case "GET":
+          return handleGetEventById(eventId, user.id);
+        case "PUT":
+        case "PATCH":
+          return handleUpdateEvent(req, eventId, user.id);
+        case "DELETE":
+          return handleDeleteEvent(eventId, user.id);
+        default:
+          return createErrorResponse(
+            `Method ${method} not allowed for this route.`,
+            405
+          );
       }
+    }
 
-      // GET /api/reminders/user/:userId
-      if (pathSegments.length === 2 && pathSegments[0] === "user") {
-        const userId = pathSegments[1];
-        const reminders = await ReminderService.getRemindersByUserId(userId);
-        return createSuccessResponse(reminders);
+    if (EVENTS_BASE_URL_REGEX.test(url)) {
+      switch (method) {
+        case "GET":
+          return handleGetEvents(user.id);
+        case "POST":
+          return handleCreateEvent(req, user.id);
+        default:
+          return createErrorResponse(
+            `Method ${method} not allowed for this route.`,
+            405
+          );
       }
+    }
 
-      // GET /api/reminders/:id
-      if (pathSegments.length === 1) {
-        const id = pathSegments[0];
-        const reminder = await ReminderService.getReminderById(id);
+    // --- Specialized Endpoints ---
+    if (TODAY_EVENTS_URL_REGEX.test(url) && method === "GET") {
+      return handleGetTodayEvents();
+    }
 
-        if (!reminder) {
-          return createErrorResponse("Reminder not found", 404);
-        }
+    if (LUNAR_CONVERT_URL_REGEX.test(url) && method === "GET") {
+      const urlParams = new URL(url).searchParams;
+      const solarDateStr = urlParams.get("date");
+      return handleLunarConvert(solarDateStr);
+    }
 
-        return createSuccessResponse(reminder);
-      }
-
-      // GET /api/reminders?user_id=...
-      if (pathSegments.length === 0) {
-        const userId = queryParams.get("user_id");
-        if (!userId) {
-          return createErrorResponse("user_id parameter is required", 400);
-        }
-
-        const reminders = await ReminderService.getRemindersByUserId(userId);
-        return createSuccessResponse(reminders);
-      }
-      break;
-
-    case "PUT":
-      // PUT /api/reminders/:id
-      if (pathSegments.length === 1) {
-        const id = pathSegments[0];
-        const updateData = await parseJsonBody<UpdateReminderRequest>(req);
-
-        const reminder = await ReminderService.updateReminder(id, updateData);
-        return createSuccessResponse(reminder, "Reminder updated successfully");
-      }
-      break;
-
-    case "DELETE":
-      // DELETE /api/reminders/:id
-      if (pathSegments.length === 1) {
-        const id = pathSegments[0];
-        await ReminderService.deleteReminder(id);
-        return createSuccessResponse(null, "Reminder deleted successfully");
-      }
-      break;
+    return createErrorResponse("Not Found", 404);
+  } catch (error) {
+    return createErrorResponse(error.message, 500);
   }
-
-  return createErrorResponse("Invalid reminder endpoint", 404);
 }
+
+// --- User Profile Handlers ---
+
+async function handleGetProfile(userId: string) {
+  const data = await UserService.getUserById(userId);
+  return createApiResponse({ data });
+}
+
+async function handleUpdateProfile(req: Request, userId: string) {
+  const body = await req.json();
+  const data = await UserService.updateUser(userId, body);
+  return createApiResponse({ data, message: "Profile updated successfully" });
+}
+
+// --- Notification Handlers ---
+
+async function handleGetNotificationSettings(userId: string) {
+  const data = await NotificationService.getNotificationSettingsByUserId(
+    userId
+  );
+  return createApiResponse({ data });
+}
+
+async function handleCreateNotificationSetting(req: Request, userId: string) {
+  const body: Omit<NotificationSetting, "id" | "created_at" | "user_id"> =
+    await req.json();
+  const data = await NotificationService.createNotificationSetting(
+    body,
+    userId
+  );
+  return createApiResponse(
+    { data, message: "Notification setting created successfully" },
+    201
+  );
+}
+
+// --- Event Handler Functions ---
+
+async function handleGetEvents(userId: string) {
+  const data = await EventService.getEventsByUserId(userId);
+  return createApiResponse({ data });
+}
+
+async function handleGetEventById(eventId: string, userId: string) {
+  const data = await EventService.getEventById(eventId, userId);
+  if (!data) return createErrorResponse("Event not found.", 404);
+  return createApiResponse({ data });
+}
+
+async function handleCreateEvent(req: Request, userId: string) {
+  const body: CreateEventRequest = await req.json();
+  const data = await EventService.createEvent(body, userId);
+  return createApiResponse(
+    { data, message: "Event created successfully" },
+    201
+  );
+}
+
+async function handleUpdateEvent(
+  req: Request,
+  eventId: string,
+  userId: string
+) {
+  const body: UpdateEventRequest = await req.json();
+  const data = await EventService.updateEvent(eventId, body, userId);
+  return createApiResponse({ data, message: "Event updated successfully" });
+}
+
+async function handleDeleteEvent(eventId: string, userId: string) {
+  const data = await EventService.deleteEvent(eventId, userId);
+  return createApiResponse({ data, message: "Event deleted successfully" });
+}
+
+async function handleGetTodayEvents() {
+  const data = await EventService.getTodayEvents();
+  return createApiResponse({ data });
+}
+
+function handleLunarConvert(solarDateStr: string | null) {
+  if (!solarDateStr) {
+    return createErrorResponse(
+      'Missing "date" query parameter. Please provide a date in YYYY-MM-DD format.',
+      400
+    );
+  }
+  const date = new Date(solarDateStr);
+  if (isNaN(date.getTime())) {
+    return createErrorResponse(
+      "Invalid date format. Please use YYYY-MM-DD.",
+      400
+    );
+  }
+  const data = LunarService.convertSolarToLunar(date);
+  return createApiResponse({ data });
+}
+
+// --- Utility Functions ---
+
+function createApiResponse<T>(body: ApiResponse<T>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+// Export the handler function for Edge Function runtime
+export default handler;
