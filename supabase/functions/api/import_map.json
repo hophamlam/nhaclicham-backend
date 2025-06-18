@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "supabase": "https://esm.sh/@supabase/supabase-js@2",
+    "lunar-calendar": "https://esm.sh/lunar-calendar-ts-vi@latest"
+  }
+}
