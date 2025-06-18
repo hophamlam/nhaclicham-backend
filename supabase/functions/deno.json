@@ -1,8 +1,10 @@
 {
-  "importMap": "./import_map.json",
+  "imports": {
+    "supabase": "https://esm.sh/@supabase/supabase-js@2",
+    "lunar-calendar": "https://esm.sh/lunar-calendar-ts-vi@latest"
+  },
   "compilerOptions": {
     "allowJs": true,
     "lib": ["deno.ns", "deno.window"]
-  },
-  "nodeModulesDir": false
+  }
 }
