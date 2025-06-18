@@ -27,7 +27,7 @@ jobs:
           PROJECT_REF: aekfivlrnrdzolsiipdf
 
       - name: Deploy functions
-        run: supabase functions deploy --no-verify-jwt
+        run: supabase functions deploy --no-verify-jwt --import-map supabase/functions/deno.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_REF: aekfivlrnrdzolsiipdf
