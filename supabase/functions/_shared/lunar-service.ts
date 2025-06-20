@@ -1,56 +1,33 @@
-// Lunar calendar service for Edge Functions
-import { LunarDate } from "./types.ts";
-// Import lunar calendar library from import map
-const lunarCalendarModule = await import("lunar-calendar");
-const lunarCalendar = lunarCalendarModule.default || lunarCalendarModule;
+// Lunar conversion service - now simplified since logic moved to Edge Function
+import { S2L, L2S } from "https://esm.sh/lunar-calendar-ts-vi@latest";
 
 export class LunarService {
-  /**
-   * Converts a solar date to a lunar date, including leap month information.
-   * @param date The solar date to convert.
-   * @returns The corresponding lunar date.
-   */
-  static convertSolarToLunar(date: Date): LunarDate {
-    try {
-      const [lunarDay, lunarMonth, lunarYear, isLeap] =
-        lunarCalendar.convertSolar2Lunar(
-          date.getDate(),
-          date.getMonth() + 1, // getMonth() is 0-indexed
-          date.getFullYear(),
-          7 // Timezone offset for Vietnam
-        );
+  // This service is deprecated - use Edge Function /api/lunar-convert and /api/solar-convert instead
+  // Keeping this for backward compatibility if needed
 
-      return { lunarDay, lunarMonth, lunarYear, isLeap: !!isLeap };
-    } catch (error) {
-      console.error("Error converting solar to lunar date:", error);
-      // Provide a fallback to ensure the function always returns a valid object
-      return {
-        lunarDay: date.getDate(),
-        lunarMonth: date.getMonth() + 1,
-        lunarYear: date.getFullYear(),
-        isLeap: false,
-      };
-    }
-  }
-
-  /**
-   * Gets today's lunar date.
-   * @returns Today's lunar date.
-   */
-  static getTodayLunarDate(): LunarDate {
-    const today = new Date();
-    return this.convertSolarToLunar(today);
-  }
-
-  /**
-   * Checks if a given lunar date is valid.
-   * @param lunarDay The lunar day (1-30).
-   * @param lunarMonth The lunar month (1-12).
-   * @returns True if the lunar date is valid.
-   */
-  static isValidLunarDate(lunarDay: number, lunarMonth: number): boolean {
-    return (
-      lunarDay >= 1 && lunarDay <= 30 && lunarMonth >= 1 && lunarMonth <= 12
+  static convertSolarToLunar(solarDate: Date) {
+    const result = S2L(
+      solarDate.getFullYear(),
+      solarDate.getMonth() + 1,
+      solarDate.getDate()
     );
+
+    return {
+      lunar_day: result[0],
+      lunar_month: result[1],
+      lunar_year: result[2],
+      is_leap_month: result[3] === 1,
+    };
+  }
+
+  static convertLunarToSolar(
+    lunarDay: number,
+    lunarMonth: number,
+    lunarYear: number,
+    isLeapMonth = false
+  ) {
+    const result = L2S(lunarDay, lunarMonth, lunarYear, isLeapMonth ? 1 : 0);
+
+    return new Date(result[2], result[1] - 1, result[0]);
   }
 }

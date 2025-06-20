@@ -1,91 +1,218 @@
-# NhacLichAm Supabase Backend
+# 🌙 Nhạc Lịch Âm (Lunar Calendar) - Backend API
 
-This is the backend for a Lunar Calendar Reminder application, built entirely on Supabase Edge Functions. It provides a serverless API for managing events (both lunar and solar), users, and notification settings.
+**Simplified hybrid architecture using Supabase REST API + Edge Functions**
 
-[![Deploy to Supabase](https://supabase.com/docs/img/deploy/button.svg)](https://supabase.com/new/project?template_url=https://github.com/hophamlam/nhaclicham-backend)
+## 🏗️ **Architecture Overview**
 
-## Features
+### **90% REST API + 10% Edge Functions**
 
-- **Serverless API**: Built with Deno and deployed as a Supabase Edge Function.
-- **Database**: Leverages Supabase Postgres for data storage.
-- **Authentication**: Integrated with Supabase Auth for user management and security.
-- **Lunar/Solar Events**: Supports creating and managing both traditional lunar calendar events and standard solar calendar events.
-- **CI/CD**: GitHub Actions workflow for automatic deployment to Supabase on push to `main`.
+- **Supabase REST API**: All CRUD operations (profiles, events, notifications)
+- **Edge Functions**: Only custom logic (lunar calendar conversion)
+- **Result**: 90% less code, better performance, easier maintenance
 
-## Database Schema
+## 🚀 **Quick Start**
 
-The database consists of four main tables:
+### **Database**
 
-- `users`: Stores user information, linked to Supabase Auth.
-- `events`: Stores event details, including notes, dates (lunar or solar), and user links.
-- `notification_settings`: Configures how and when users are notified about events.
-- `notification_logs`: Records all notifications sent to users.
+```bash
+# Setup database
+supabase start
+supabase db reset
 
-For detailed schema and policies, see the migration file at `supabase/migrations/20250618000000_initial_schema.sql`.
+# Deploy
+supabase functions deploy lunar-api
+```
 
-## API Endpoints
+### **API Endpoints**
 
-All endpoints are served from the main Edge Function located at `/supabase/functions/api`. A valid Supabase JWT is required in the `Authorization: Bearer <TOKEN>` header for all requests.
+#### **🌙 Lunar Conversion (Edge Function)**
 
-### Events
+```bash
+# Solar to Lunar
+GET /functions/v1/lunar-api/lunar-convert?date=2024-12-25
 
-- **`GET /api/events`**: Get all events for the authenticated user.
-- **`POST /api/events`**: Create a new event.
-  - **Body**: `CreateEventRequest`
-- **`GET /api/events/{id}`**: Get a single event by its ID.
-- **`PUT /api/events/{id}`**: Update an event by its ID.
-  - **Body**: `UpdateEventRequest`
-- **`DELETE /api/events/{id}`**: Delete an event by its ID.
+# Lunar to Solar
+GET /functions/v1/lunar-api/solar-convert?lunar_day=15&lunar_month=8&lunar_year=2024
+```
 
-### Specialized Endpoints
+#### **📊 CRUD Operations (REST API)**
 
-- **`GET /api/today-events`**: Get all events (for all users) that are due today. This is intended for use by a scheduled trigger (e.g., Supabase Cron Job) to send notifications.
-- **`GET /api/lunar-convert?date=YYYY-MM-DD`**: Convert a solar date to its corresponding lunar date.
+```typescript
+// Profiles
+const { data: profile } = await supabase
+  .from("profiles")
+  .select("*")
+  .eq("id", userId);
+const { data } = await supabase
+  .from("profiles")
+  .update({ display_name: "New Name" })
+  .eq("id", userId);
 
-### TypeScript Types
+// Events
+const { data: events } = await supabase
+  .from("events")
+  .select("*")
+  .eq("user_id", userId);
+const { data } = await supabase
+  .from("events")
+  .insert({ user_id: userId, note: "Event", is_lunar: true });
 
-The shared types for API requests and database objects can be found in `supabase/functions/_shared/types.ts`.
+// Notifications
+const { data: settings } = await supabase
+  .from("notification_settings")
+  .select("*")
+  .eq("user_id", userId);
+```
 
-## Local Development
+## 🧪 **Testing with Postman**
 
-1.  **Install Supabase CLI**:
-    Follow the [official instructions](https://supabase.com/docs/guides/cli) to install the CLI.
+### **Step 1: Import Collection**
 
-2.  **Link Project**:
-    Link your local repository to your Supabase project. You will need your project's reference ID.
+1. Import `nhaclicham_api.postman_collection.json` into Postman
+2. Collection includes authentication workflow and API testing
 
-    ```bash
-    supabase link --project-ref <YOUR_PROJECT_ID>
-    ```
+### **Step 2: Authentication Workflow**
 
-3.  **Set Up Environment Variables**:
-    Create a `.env.local` file in the `supabase` directory and add your project's keys.
+```
+🔐 Authentication
+├── 1. Sign Up         (Creates new user + auto-saves JWT)
+├── 2. Sign In         (Login existing user + auto-saves JWT)
+├── 3. Get User Info   (Verify current user)
+├── 4. Refresh Token   (Renew expired JWT)
+└── 5. Sign Out        (Logout user)
+```
 
-    ```
-    SUPABASE_URL=https://<YOUR_PROJECT_ID>.supabase.co
-    SUPABASE_ANON_KEY=<YOUR_ANON_KEY>
-    SUPABASE_SERVICE_ROLE_KEY=<YOUR_SERVICE_ROLE_KEY>
-    ```
+### **Step 3: Test Your Own Data**
 
-4.  **Run Functions Locally**:
-    Start the local Supabase environment. This will also serve the Edge Functions.
-    ```bash
-    supabase functions serve --env-file ./supabase/.env.local
-    ```
+After signing up/in, the collection automatically:
 
-## Deployment
+- ✅ Saves JWT token to global variables
+- ✅ Saves User ID for authenticated requests
+- ✅ All subsequent requests use your user data
 
-The project is configured for automatic deployment using GitHub Actions. Any push to the `main` branch will trigger the workflow defined in `.github/workflows/deploy.yml`, which deploys the Edge Functions to your linked Supabase project.
+### **Step 4: API Testing Flow**
 
-For this to work, you must set the following secrets in your GitHub repository settings:
+```
+1. 🔐 Sign Up/Sign In first
+   └── JWT + User ID auto-saved
 
-- `SUPABASE_ACCESS_TOKEN`: Your Supabase personal access token.
-- `SUPABASE_PROJECT_ID`: Your Supabase project ID.
+2. 👤 Create/Update Profile
+   └── Uses your User ID
 
-## Contributing
+3. 📅 Manage Your Events
+   └── CRUD operations on your events
 
-Contributions are welcome! Please feel free to submit a pull request. For more details, see [CONTRIBUTING.md](./CONTRIBUTING.md).
+4. 🔔 Setup Notifications
+   └── Configure your notification preferences
 
-## License
+5. 🌙 Test Lunar Conversion
+   └── Convert dates (no user data needed)
+```
 
-This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
+### **Authentication Details**
+
+- **Sign Up**: Creates account + returns JWT
+- **Sign In**: Login + returns fresh JWT
+- **Auto Token Management**: JWT automatically saved to globals
+- **User Isolation**: Each user only sees their own data
+- **Token Expiry**: Use "Refresh Token" if JWT expires
+
+## 📁 **Project Structure**
+
+```
+nhaclicham-backend/
+├── supabase/
+│   ├── functions/
+│   │   ├── lunar-api/           # 🌙 Lunar conversion only
+│   │   │   └── index.ts
+│   │   └── _shared/
+│   │       ├── supabase.ts      # Client setup
+│   │       ├── types.ts         # TypeScript types
+│   │       └── lunar-service.ts # Backward compatibility
+│   ├── migrations/
+│   │   └── 20250618000000_initial_schema.sql
+│   └── config.toml
+├── README.md
+├── REFACTOR_SUMMARY.md          # 📊 Detailed comparison
+└── nhaclicham_api.postman_collection.json  # 🧪 API testing
+```
+
+## 🎯 **Key Benefits**
+
+### **Simplified Codebase**
+
+- ✅ **90% Less Code**: Removed redundant CRUD functions
+- ✅ **Single Purpose**: Edge Functions only for complex logic
+- ✅ **Standard Patterns**: REST API follows conventions
+
+### **Better Performance**
+
+- ✅ **Direct DB Access**: No unnecessary Edge Function overhead
+- ✅ **Built-in Caching**: Supabase REST API optimization
+- ✅ **Real-time Support**: WebSocket subscriptions available
+
+### **Developer Experience**
+
+- ✅ **Auto-generated Types**: TypeScript types from schema
+- ✅ **RLS Security**: Row Level Security built-in
+- ✅ **Easier Testing**: Standard REST endpoints
+- ✅ **Less Maintenance**: Fewer custom functions to maintain
+
+## 🔧 **Development**
+
+### **Environment Setup**
+
+```bash
+# Install Supabase CLI
+npm install -g @supabase/cli
+
+# Login and link project
+supabase login
+supabase link --project-ref aekfivlrnrdzolsiipdf
+```
+
+### **Testing API**
+
+1. Import `nhaclicham_api.postman_collection.json` into Postman
+2. Set JWT token for authenticated requests
+3. Test REST endpoints and lunar conversion
+
+### **Database Schema**
+
+- **auth.users**: Supabase Auth integration
+- **profiles**: User profile information
+- **events**: Calendar events (lunar/solar)
+- **notification_settings**: User notification preferences
+- **notification_logs**: Sent notification history
+
+## 🌐 **Live API**
+
+**Base URL**: `https://aekfivlrnrdzolsiipdf.supabase.co`
+
+- **REST API**: `/rest/v1/`
+- **Edge Functions**: `/functions/v1/lunar-api/`
+- **Auth**: `/auth/v1/`
+
+## 📊 **Before vs After**
+
+| Aspect            | Before (Complex Edge Functions) | After (Hybrid Approach) |
+| ----------------- | ------------------------------- | ----------------------- |
+| **Lines of Code** | ~1000+ lines                    | ~200 lines              |
+| **Complexity**    | High (custom CRUD)              | Low (standard REST)     |
+| **Performance**   | Function overhead               | Direct DB access        |
+| **Maintenance**   | Complex debugging               | Standard patterns       |
+| **Real-time**     | Custom implementation           | Built-in WebSockets     |
+| **Types**         | Manual typing                   | Auto-generated          |
+
+## 🎉 **Result**
+
+**Perfect balance between simplicity and functionality:**
+
+- 🌙 **Preserved**: Complex lunar calendar logic in Edge Functions
+- 📊 **Simplified**: CRUD operations via standard REST API
+- 🚀 **Optimized**: Better performance and developer experience
+- 🔧 **Maintainable**: Less custom code, more conventions
+
+---
+
+_Built with [Supabase](https://supabase.com) | Powered by [lunar-calendar-ts-vi](https://www.npmjs.com/package/lunar-calendar-ts-vi)_

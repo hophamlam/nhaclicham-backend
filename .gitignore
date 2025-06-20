@@ -107,3 +107,6 @@ temp/
 
 # Cursor
 cursorai-instructions/supabase/.temp/
+
+# postman
+postman/
